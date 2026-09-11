@@ -43,7 +43,7 @@ jobs:
       - name: Apply HL-WR832 board support
         working-directory: rooter
         run: |
-          patch -p0 < ../engineering/HL-WR832-board-support.patch
+          patch -p5 < ../engineering/HL-WR832-board-support.patch
 
           test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
 
