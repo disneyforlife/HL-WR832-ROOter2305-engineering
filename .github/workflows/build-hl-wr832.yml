@@ -40,7 +40,9 @@ jobs:
       - name: Apply HL-WR832 board support
         working-directory: rooter
         run: |
-          sed -e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
+          sed -e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' \
+              -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' \
+              ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
           test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
           grep -q 'compatible = "hooolink,hl-wr832"' target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
           grep -q 'Device/hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
@@ -65,6 +67,24 @@ jobs:
           grep -q '^CONFIG_TARGET_ipq40xx_generic=y' .config
           grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
           echo "Exact authoritative HL-WR832 configuration installed."
+
+      - name: Apply Build 6 ucode dependency compatibility correction
+        working-directory: rooter
+        run: |
+          sed -i \
+            -e 's/^# CONFIG_PACKAGE_ucode-mod-nl80211 is not set$/CONFIG_PACKAGE_ucode-mod-nl80211=y/' \
+            -e 's/^# CONFIG_PACKAGE_ucode-mod-rtnl is not set$/CONFIG_PACKAGE_ucode-mod-rtnl=y/' \
+            -e 's/^# CONFIG_PACKAGE_ucode-mod-uloop is not set$/CONFIG_PACKAGE_ucode-mod-uloop=y/' \
+            .config
+
+          grep -q '^CONFIG_PACKAGE_ucode=y$' .config
+          grep -q '^CONFIG_PACKAGE_wpad-basic-mbedtls=y$' .config
+          grep -q '^CONFIG_PACKAGE_ucode-mod-nl80211=y$' .config
+          grep -q '^CONFIG_PACKAGE_ucode-mod-rtnl=y$' .config
+          grep -q '^CONFIG_PACKAGE_ucode-mod-uloop=y$' .config
+
+          echo "Build 6 compatibility correction applied:"
+          grep '^CONFIG_PACKAGE_ucode-mod-\(nl80211\|rtnl\|uloop\)=y$' .config
 
       - name: Apply authorized libdeflate 1.18 hash correction
         working-directory: rooter
@@ -116,6 +136,10 @@ jobs:
 
           cp engineering/HL-WR832.config engineering-output/
           cp engineering/HL-WR832-board-support.patch engineering-output/
+
+          if [ -f rooter/.config ]; then
+            cp rooter/.config engineering-output/HL-WR832-Build6-effective.config
+          fi
 
           cd engineering-output
           find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
