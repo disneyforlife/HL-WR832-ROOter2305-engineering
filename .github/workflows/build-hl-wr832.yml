@@ -60,7 +60,7 @@ jobs:
           echo "41f4f60f828d35aa06e9b249d47724d84e0b620c343f1dbf6930cac4a90dc6a4  target/linux/ipq40xx/base-files/etc/board.d/02_network" | sha256sum -c -
           echo "f6cc84ec286021b1f24670f560dccfb7b7ee8984b09e914e380c435000209406  target/linux/ipq40xx/base-files/lib/upgrade/platform.sh" | sha256sum -c -
 
-      - name: Apply Build 8 HL-WR832 DTS syntax correction
+      - name: Apply Build 9 HL-WR832 DTS syntax correction
         working-directory: rooter
         run: |
           python3 - <<'PY'
@@ -112,7 +112,7 @@ jobs:
           text = text.replace(anchor, insertion, 1)
           path.write_text(text)
 
-          print("Build 8 DTS syntax correction applied.")
+          print("Build 9 DTS syntax correction applied.")
           PY
 
           DTS="target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts"
@@ -130,7 +130,7 @@ jobs:
           test "$(grep -c '^[[:space:]]*i2c@78b7000 {' "$DTS")" -eq 1
           test "$(grep -c '^[[:space:]]*serial@78b0000 {' "$DTS")" -eq 1
 
-          echo "b5a109237823d81ec06441574fc43b36e1ae321c03a0e1f7da6c3a1394f32f2b  $DTS" | sha256sum -c -
+          echo "cf9c7d8f429359c4eea4cfd30c9a185de4f8c36fee3f729c01a15b53b31fa4f8  $DTS" | sha256sum -c -
 
           echo "Corrected HL-WR832 DTS verified."
 
@@ -222,12 +222,12 @@ jobs:
 
           if [ -f rooter/.config ]; then
             cp rooter/.config \
-              engineering-output/HL-WR832-Build8-effective.config
+              engineering-output/HL-WR832-Build9-effective.config
           fi
 
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
             cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts \
-              engineering-output/HL-WR832-Build8-effective.dts
+              engineering-output/HL-WR832-Build9-effective.dts
           fi
 
           cd engineering-output
