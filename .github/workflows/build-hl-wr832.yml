@@ -63,7 +63,7 @@ jobs:
           echo "ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  .config" | sha256sum -c -
           grep -q '^CONFIG_TARGET_ipq40xx=y' .config
           grep -q '^CONFIG_TARGET_ipq40xx_generic=y' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y' .config
+          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
 
           if grep -i -q 'habanero' .config; then
             echo "ERROR: Habanero detected in HL-WR832 configuration."
