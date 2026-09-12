@@ -24,15 +24,12 @@ jobs:
 
       - name: Clone official ROOter 23.05 source
         run: |
-          git clone --depth=1 \
-            https://github.com/ofmodemsandmen/ROOterSource2305.git \
-            rooter
+          git clone --depth=1 https://github.com/ofmodemsandmen/ROOterSource2305.git rooter
 
       - name: Verify engineering input files exist
         run: |
           test -f engineering/HL-WR832-board-support.patch
           test -f engineering/HL-WR832.config
-
           echo "HL-WR832 engineering inputs found."
 
       - name: Verify authoritative HL-WR832 inputs
@@ -43,22 +40,12 @@ jobs:
       - name: Apply HL-WR832 board support
         working-directory: rooter
         run: |
-          patch -p5 < ../engineering/HL-WR832-board-support.patch
-
+          sed -e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
           test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-
-          grep -q 'compatible = "hooolink,hl-wr832"' \
-            target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-
-          grep -q 'Device/hooolink_hl-wr832' \
-            target/linux/ipq40xx/image/generic.mk
-
-          grep -q 'hooolink,hl-wr832' \
-            target/linux/ipq40xx/base-files/etc/board.d/02_network
-
-          grep -q 'hooolink,hl-wr832' \
-            target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
-
+          grep -q 'compatible = "hooolink,hl-wr832"' target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+          grep -q 'Device/hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
+          grep -q 'hooolink,hl-wr832' target/linux/ipq40xx/base-files/etc/board.d/02_network
+          grep -q 'hooolink,hl-wr832' target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
           echo "HL-WR832 board support applied."
 
       - name: Verify exact HL-WR832 board hashes
@@ -73,9 +60,7 @@ jobs:
         working-directory: rooter
         run: |
           cp ../engineering/HL-WR832.config .config
-
           echo "ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  .config" | sha256sum -c -
-
           grep -q '^CONFIG_TARGET_ipq40xx=y' .config
           grep -q '^CONFIG_TARGET_ipq40xx_generic=y' .config
           grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y' .config
@@ -90,17 +75,13 @@ jobs:
       - name: Apply authorized libdeflate 1.18 hash correction
         working-directory: rooter
         run: |
-          sed -i \
-            's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' \
-            tools/libdeflate/Makefile
-
-          grep -q \
-            'd35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0' \
-            tools/libdeflate/Makefile
+          sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
+          grep -q 'd35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0' tools/libdeflate/Makefile
 
       - name: Download build sources
         working-directory: rooter
         run: |
+          set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
 
       - name: Build HL-WR832 engineering sample
@@ -132,7 +113,6 @@ jobs:
         if: always()
         run: |
           mkdir -p engineering-output
-
           cp build.log engineering-output/ 2>/dev/null || true
           cp download.log engineering-output/ 2>/dev/null || true
 
@@ -144,9 +124,7 @@ jobs:
           cp engineering/HL-WR832-board-support.patch engineering-output/
 
           cd engineering-output
-          find . -type f ! -name SHA256SUMS -print0 \
-            | sort -z \
-            | xargs -0 sha256sum > SHA256SUMS
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 
       - name: Upload HL-WR832 engineering artifacts
         if: always()
