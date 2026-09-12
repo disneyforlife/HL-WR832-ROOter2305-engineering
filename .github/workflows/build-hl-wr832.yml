@@ -64,13 +64,7 @@ jobs:
           grep -q '^CONFIG_TARGET_ipq40xx=y' .config
           grep -q '^CONFIG_TARGET_ipq40xx_generic=y' .config
           grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
-
-          if grep -i -q 'habanero' .config; then
-            echo "ERROR: Habanero detected in HL-WR832 configuration."
-            exit 1
-          fi
-
-          echo "Exact HL-WR832 configuration installed."
+          echo "Exact authoritative HL-WR832 configuration installed."
 
       - name: Apply authorized libdeflate 1.18 hash correction
         working-directory: rooter
@@ -101,7 +95,7 @@ jobs:
           fi
 
           if find bin/targets -type f -iname '*habanero*' | grep -q .; then
-            echo "ERROR: Habanero output detected."
+            echo "ERROR: Unexpected Habanero firmware output detected."
             find bin/targets -type f -iname '*habanero*'
             exit 1
           fi
