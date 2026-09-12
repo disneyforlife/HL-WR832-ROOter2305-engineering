@@ -60,7 +60,7 @@ jobs:
           echo "41f4f60f828d35aa06e9b249d47724d84e0b620c343f1dbf6930cac4a90dc6a4  target/linux/ipq40xx/base-files/etc/board.d/02_network" | sha256sum -c -
           echo "f6cc84ec286021b1f24670f560dccfb7b7ee8984b09e914e380c435000209406  target/linux/ipq40xx/base-files/lib/upgrade/platform.sh" | sha256sum -c -
 
-      - name: Apply Build 7 HL-WR832 DTS syntax correction
+      - name: Apply Build 8 HL-WR832 DTS syntax correction
         working-directory: rooter
         run: |
           python3 - <<'PY'
@@ -84,20 +84,21 @@ jobs:
 
           '''
 
-          if old not in text:
+          if text.count(old) != 1:
               raise SystemExit(
-                  "ERROR: Expected original invalid DTS override block was not found."
+                  "ERROR: Expected exactly one original invalid DTS override block."
               )
 
           text = text.replace(old, "", 1)
 
-          anchor = '''	soc {
-          	/delete-node/ leds;
+          anchor = "\t\t/delete-node/ leds;"
 
-          '''
+          if text.count(anchor) != 1:
+              raise SystemExit(
+                  "ERROR: Expected exactly one /delete-node/ leds anchor."
+              )
 
-          replacement = '''	soc {
-          	/delete-node/ leds;
+          insertion = '''		/delete-node/ leds;
 
           	/* GPIO20/21 and GPIO8/9 are board LTE-power controls, not I2C/UART1. */
           	i2c@78b7000 {
@@ -106,19 +107,12 @@ jobs:
 
           	serial@78b0000 {
           		status = "disabled";
-          	};
+          	};'''
 
-          '''
-
-          if anchor not in text:
-              raise SystemExit(
-                  "ERROR: Expected HL-WR832 soc block anchor was not found."
-              )
-
-          text = text.replace(anchor, replacement, 1)
+          text = text.replace(anchor, insertion, 1)
           path.write_text(text)
 
-          print("Build 7 DTS syntax correction applied.")
+          print("Build 8 DTS syntax correction applied.")
           PY
 
           DTS="target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts"
@@ -133,8 +127,8 @@ jobs:
             exit 1
           fi
 
-          grep -q 'i2c@78b7000 {' "$DTS"
-          grep -q 'serial@78b0000 {' "$DTS"
+          test "$(grep -c '^[[:space:]]*i2c@78b7000 {' "$DTS")" -eq 1
+          test "$(grep -c '^[[:space:]]*serial@78b0000 {' "$DTS")" -eq 1
 
           echo "b5a109237823d81ec06441574fc43b36e1ae321c03a0e1f7da6c3a1394f32f2b  $DTS" | sha256sum -c -
 
@@ -153,7 +147,7 @@ jobs:
 
           echo "Exact authoritative HL-WR832 configuration installed."
 
-      - name: Apply Build 6 ucode dependency compatibility correction
+      - name: Apply ucode dependency compatibility correction
         working-directory: rooter
         run: |
           sed -i \
@@ -228,12 +222,12 @@ jobs:
 
           if [ -f rooter/.config ]; then
             cp rooter/.config \
-              engineering-output/HL-WR832-Build7-effective.config
+              engineering-output/HL-WR832-Build8-effective.config
           fi
 
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
             cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts \
-              engineering-output/HL-WR832-Build7-effective.dts
+              engineering-output/HL-WR832-Build8-effective.dts
           fi
 
           cd engineering-output
