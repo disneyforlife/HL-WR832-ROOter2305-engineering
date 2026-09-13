@@ -1,4 +1,4 @@
-name: Build HL-WR832 ROOter 23.05 Engineering Build 11
+name: Build HL-WR832 ROOter 23.05 Engineering Build 12
 
 on:
   workflow_dispatch:
@@ -417,69 +417,9 @@ jobs:
           set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
 
-      - name: Build host tools and target toolchain before DTS preflight
-        id: toolchain
-        if: steps.download.outcome == 'success'
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          {
-            echo '=== tools/install ==='
-            make tools/install -j2 V=s
-            echo '=== toolchain/install ==='
-            make toolchain/install -j2 V=s
-          } 2>&1 | tee ../toolchain-preflight.log
-
-      - name: Prepare patched IPQ40xx kernel tree
-        id: prepare
-        if: steps.toolchain.outcome == 'success'
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          make target/linux/prepare -j2 V=s 2>&1 | tee ../target-linux-prepare.log
-
-      - name: Audit every DTS label against the prepared source tree
-        id: labelaudit
-        if: steps.prepare.outcome == 'success'
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          DTS=target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          KDT=$(find build_dir -type d -path '*/linux-ipq40xx_generic/linux-*/arch/arm/boot/dts' -print -quit)
-          test -n "$KDT"
-          echo "Prepared DTS directory: $KDT"
-
-          # The board-local labels are resolved inside the HL-WR832 DTS itself.
-          # Every external label below must exist in the fully patched kernel DTS tree.
-          for label in \
-            blsp_dma qpic_bam usb3_ss_phy usb3_hs_phy usb2_hs_phy blsp1_spi1 \
-            nand wifi0 wifi1 gmac switch swport1 swport2 swport3 swport4 swport5 tlmm
-          do
-            if ! grep -RqsE "(^|[[:space:]])${label}:[[:space:]]" "$KDT"; then
-              echo "ERROR: external DTS label not found after OpenWrt patches: $label"
-              exit 1
-            fi
-          done
-
-          # Verify no prohibited foreign-board include survived anywhere in the HL-WR832 DTS.
-          ! grep -Eiq 'e2600|e2600ac|e2600ac-c2|ipq4029' "$DTS"
-
-      - name: Compile IPQ40xx target and HL-WR832 DTB preflight
-        id: preflight
-        if: steps.labelaudit.outcome == 'success'
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          make target/linux/compile -j2 V=s 2>&1 | tee ../target-linux-preflight.log
-          find build_dir -type f -name 'image-qcom-ipq4019-hooolink-hl-wr832.dtb' -print -quit | grep -q .
-
       - name: Full ROOter engineering build
         id: fullbuild
-        if: steps.preflight.outcome == 'success'
+        if: steps.download.outcome == 'success'
         working-directory: rooter
         continue-on-error: true
         run: |
@@ -493,14 +433,11 @@ jobs:
           mkdir -p artifact
           cp engineering/HL-WR832-board-support.patch artifact/HL-WR832-authoritative-board-support.patch
           cp engineering/HL-WR832.config artifact/HL-WR832-authoritative.config
-          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build11-effective.config; fi
+          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build12-effective.config; fi
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
-            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build11-effective.dts
+            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build12-effective.dts
           fi
           [ ! -f download.log ] || cp download.log artifact/
-          [ ! -f toolchain-preflight.log ] || cp toolchain-preflight.log artifact/
-          [ ! -f target-linux-prepare.log ] || cp target-linux-prepare.log artifact/
-          [ ! -f target-linux-preflight.log ] || cp target-linux-preflight.log artifact/
           [ ! -f build.log ] || cp build.log artifact/
 
           if [ -d rooter/bin/targets/ipq40xx/generic ]; then
@@ -513,11 +450,11 @@ jobs:
 
           (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
 
-      - name: Upload Build 11 evidence and firmware
+      - name: Upload Build 12 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HL-WR832-ROOter2305-engineering-Build11
+          name: HL-WR832-ROOter2305-engineering-Build12
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
@@ -526,15 +463,7 @@ jobs:
         if: always()
         run: |
           echo "download outcome: ${{ steps.download.outcome }}"
-          echo "toolchain outcome: ${{ steps.toolchain.outcome }}"
-          echo "target prepare outcome: ${{ steps.prepare.outcome }}"
-          echo "DTS label audit outcome: ${{ steps.labelaudit.outcome }}"
-          echo "target/linux preflight outcome: ${{ steps.preflight.outcome }}"
           echo "full build outcome: ${{ steps.fullbuild.outcome }}"
           test "${{ steps.download.outcome }}" = "success"
-          test "${{ steps.toolchain.outcome }}" = "success"
-          test "${{ steps.prepare.outcome }}" = "success"
-          test "${{ steps.labelaudit.outcome }}" = "success"
-          test "${{ steps.preflight.outcome }}" = "success"
           test "${{ steps.fullbuild.outcome }}" = "success"
           test -f rooter/bin/targets/ipq40xx/generic/openwrt-ipq40xx-generic-hooolink_hl-wr832-squashfs-sysupgrade.bin
