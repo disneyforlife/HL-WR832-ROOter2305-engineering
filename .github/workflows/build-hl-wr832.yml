@@ -1,4 +1,4 @@
-name: Build HL-WR832 ROOter 23.05 Engineering Build 16
+name: Build HL-WR832 ROOter 23.05 Engineering Build 17
 
 on:
   workflow_dispatch:
@@ -414,6 +414,12 @@ jobs:
             -e 's/^# CONFIG_PACKAGE_ucode-mod-rtnl is not set$/CONFIG_PACKAGE_ucode-mod-rtnl=y/' \
             -e 's/^# CONFIG_PACKAGE_ucode-mod-uloop is not set$/CONFIG_PACKAGE_ucode-mod-uloop=y/' \
             .config
+          # The authoritative config predates HL-WR832 being injected into generic.mk.
+          # TARGET_PROFILE alone compiles the target/DTB but does not select this device's images.
+          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config || \
+            printf '%s\n' 'CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y' >> .config
+          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
+          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
 
           grep -q '^CONFIG_PACKAGE_ucode=y$' .config
           grep -q '^CONFIG_PACKAGE_wpad-basic-mbedtls=y$' .config
@@ -437,6 +443,19 @@ jobs:
           set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
 
+      - name: Verify HL-WR832 image selection before full build
+        if: steps.download.outcome == 'success'
+        working-directory: rooter
+        run: |
+          set -euxo pipefail
+          grep -q '^CONFIG_TARGET_BOARD="ipq40xx"$' .config
+          grep -q '^CONFIG_TARGET_SUBTARGET="generic"$' .config
+          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
+          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
+          grep -q '^define Device/hooolink_hl-wr832$' target/linux/ipq40xx/image/generic.mk
+          grep -q '^TARGET_DEVICES += hooolink_hl-wr832$' target/linux/ipq40xx/image/generic.mk
+          echo "HL-WR832 device image selection preflight: PASS"
+
       - name: Full ROOter engineering build
         id: fullbuild
         if: steps.download.outcome == 'success'
@@ -455,9 +474,9 @@ jobs:
           cp engineering/HL-WR832.config artifact/HL-WR832-authoritative.config
           [ ! -f bootstrap.log ] || cp bootstrap.log artifact/
           [ ! -f clone.log ] || cp clone.log artifact/
-          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build16-effective.config; fi
+          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build17-effective.config; fi
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
-            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build16-effective.dts
+            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build17-effective.dts
           fi
           [ ! -f download.log ] || cp download.log artifact/
           [ ! -f build.log ] || cp build.log artifact/
@@ -472,11 +491,11 @@ jobs:
 
           (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
 
-      - name: Upload Build 16 evidence and firmware
+      - name: Upload Build 17 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HL-WR832-ROOter2305-engineering-Build16
+          name: HL-WR832-ROOter2305-engineering-Build17
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
