@@ -1,4 +1,4 @@
-name: Build HL-WR832 ROOter 23.05 Engineering Build 14
+name: Build HL-WR832 ROOter 23.05 Engineering Build 16
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
 
     steps:
@@ -16,20 +16,40 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
+        id: deps
+        continue-on-error: true
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential clang flex bison g++ gawk gcc-multilib gettext git \
-            libncurses5-dev libssl-dev python3 python3-distutils python3-setuptools \
-            rsync swig unzip zlib1g-dev file wget curl patch xz-utils zstd
+          set -o pipefail
+          {
+            set -eux
+            echo "Runner OS:"
+            cat /etc/os-release
+            echo "Architecture:"
+            uname -a
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              build-essential clang flex bison g++ gawk gcc-multilib gettext git \
+              libncurses-dev libssl-dev python3 python3-dev python3-setuptools \
+              rsync swig unzip zlib1g-dev file wget curl patch xz-utils zstd
+            git --version
+            python3 --version
+            gcc --version | head -n 1
+          } 2>&1 | tee bootstrap.log
 
       - name: Clone pristine ROOter 23.05 source
+        id: clone
+        if: steps.deps.outcome == 'success'
+        continue-on-error: true
         run: |
-          set -euxo pipefail
-          git clone --depth 1 https://github.com/ofmodemsandmen/ROOterSource2305.git rooter
+          set -o pipefail
+          {
+            set -eux
+            git clone --depth 1 https://github.com/ofmodemsandmen/ROOterSource2305.git rooter
+            git -C rooter rev-parse HEAD
+          } 2>&1 | tee clone.log
 
       - name: Verify authoritative engineering inputs
+        if: steps.clone.outcome == 'success'
         run: |
           set -euxo pipefail
           echo "865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch" | sha256sum -c -
@@ -433,9 +453,11 @@ jobs:
           mkdir -p artifact
           cp engineering/HL-WR832-board-support.patch artifact/HL-WR832-authoritative-board-support.patch
           cp engineering/HL-WR832.config artifact/HL-WR832-authoritative.config
-          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build14-effective.config; fi
+          [ ! -f bootstrap.log ] || cp bootstrap.log artifact/
+          [ ! -f clone.log ] || cp clone.log artifact/
+          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build16-effective.config; fi
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
-            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build14-effective.dts
+            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build16-effective.dts
           fi
           [ ! -f download.log ] || cp download.log artifact/
           [ ! -f build.log ] || cp build.log artifact/
@@ -450,11 +472,11 @@ jobs:
 
           (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
 
-      - name: Upload Build 14 evidence and firmware
+      - name: Upload Build 16 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HL-WR832-ROOter2305-engineering-Build14
+          name: HL-WR832-ROOter2305-engineering-Build16
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
@@ -462,8 +484,12 @@ jobs:
       - name: Final build result gate
         if: always()
         run: |
+          echo "dependency install outcome: ${{ steps.deps.outcome }}"
+          echo "source clone outcome: ${{ steps.clone.outcome }}"
           echo "download outcome: ${{ steps.download.outcome }}"
           echo "full build outcome: ${{ steps.fullbuild.outcome }}"
+          test "${{ steps.deps.outcome }}" = "success"
+          test "${{ steps.clone.outcome }}" = "success"
           test "${{ steps.download.outcome }}" = "success"
           test "${{ steps.fullbuild.outcome }}" = "success"
           test -f rooter/bin/targets/ipq40xx/generic/openwrt-ipq40xx-generic-hooolink_hl-wr832-squashfs-sysupgrade.bin
