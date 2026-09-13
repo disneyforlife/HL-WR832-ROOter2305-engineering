@@ -1,4 +1,4 @@
-name: Build HL-WR832 ROOter 23.05 Engineering Build 12
+name: Build HL-WR832 ROOter 23.05 Engineering Build 14
 
 on:
   workflow_dispatch:
@@ -433,9 +433,9 @@ jobs:
           mkdir -p artifact
           cp engineering/HL-WR832-board-support.patch artifact/HL-WR832-authoritative-board-support.patch
           cp engineering/HL-WR832.config artifact/HL-WR832-authoritative.config
-          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build12-effective.config; fi
+          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build14-effective.config; fi
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
-            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build12-effective.dts
+            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build14-effective.dts
           fi
           [ ! -f download.log ] || cp download.log artifact/
           [ ! -f build.log ] || cp build.log artifact/
@@ -450,11 +450,11 @@ jobs:
 
           (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
 
-      - name: Upload Build 12 evidence and firmware
+      - name: Upload Build 14 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HL-WR832-ROOter2305-engineering-Build12
+          name: HL-WR832-ROOter2305-engineering-Build14
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
