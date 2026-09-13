@@ -1,4 +1,4 @@
-name: Build HL-WR832 ROOter 23.05 Engineering Build 10
+name: Build HL-WR832 ROOter 23.05 Engineering Build 11
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
           echo "865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch" | sha256sum -c -
           echo "ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  engineering/HL-WR832.config" | sha256sum -c -
 
-      - name: Apply authoritative HL-WR832 board patch
+      - name: Apply preserved HL-WR832 board integration patch
         working-directory: rooter
         run: |
           set -euxo pipefail
@@ -49,13 +49,14 @@ jobs:
           echo "f6cc84ec286021b1f24670f560dccfb7b7ee8984b09e914e380c435000209406  target/linux/ipq40xx/base-files/lib/upgrade/platform.sh" | sha256sum -c -
           echo "dc1b85db39b626211ce1e55e0c9ca8ec9bbb40d4dfd250cd3c0e54429304f03d  target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts" | sha256sum -c -
 
-      - name: Replace suspect inherited DTS with audited HL-WR832 standalone DTS
+      - name: Install audited OEM-derived HL-WR832 DTS
         working-directory: rooter
         run: |
           set -euxo pipefail
           cat > target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts <<'HLWR832_DTS'
           /* SPDX-License-Identifier: GPL-2.0-or-later OR MIT */
-          /* Hooolink HL-WR832 - board-specific definition from OEM documentation and board dump. */
+          /* Hooolink HL-WR832 - OEM/dump-derived board definition. */
+          /* Generic IPQ4019 nodes are used only for SoC/software structure. */
           
           #include "qcom-ipq4019.dtsi"
           #include <dt-bindings/gpio/gpio.h>
@@ -68,26 +69,25 @@ jobs:
           
           	memory {
           		device_type = "memory";
-          		reg = <0x80000000 0x20000000>; /* OEM: 512 MB */
+          		reg = <0x80000000 0x20000000>; /* OEM/board evidence: 512 MiB */
           	};
           
           	soc {
-          		rng@22000 {
-          			status = "okay";
-          		};
-          
+          		/* OEM board has external Ethernet PHY/switch over MDIO/MDC. */
           		mdio@90000 {
           			status = "okay";
           			pinctrl-0 = <&hlwr832_mdio_pins>;
           			pinctrl-names = "default";
           		};
           
+          		/* Generic IPQ4019 selectors required by the OEM-present Wi-Fi blocks. */
           		tcsr@1949000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1949000 0x100>;
           			qcom,wifi_glb_cfg = <TCSR_WIFI_GLB_CFG>;
           		};
           
+          		/* OEM board exposes USB host ports. */
           		tcsr@194b000 {
           			compatible = "qcom,tcsr";
           			reg = <0x194b000 0x100>;
@@ -95,12 +95,14 @@ jobs:
           			status = "okay";
           		};
           
+          		/* OEM Ethernet is PSGMII to the external five-port PHY/switch. */
           		ess_tcsr@1953000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1953000 0x1000>;
           			qcom,ess-interface-select = <TCSR_ESS_PSGMII>;
           		};
           
+          		/* Generic IPQ4019 Wi-Fi NoC selector for the OEM-present radios. */
           		tcsr@1957000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1957000 0x100>;
@@ -111,18 +113,19 @@ jobs:
           			status = "okay";
           		};
           
+          		/* OEM schematic: UART0 uses GPIO16/17. */
           		serial@78af000 {
           			pinctrl-0 = <&hlwr832_serial0_pins>;
           			pinctrl-names = "default";
           			status = "okay";
           		};
           
-          		/* GPIO8/9 are HL-WR832 LTE controls; UART1 remains disabled. */
+          		/* OEM-derived HL-WR832 mapping reserves GPIO8/9 for LTE controls. */
           		serial@78b0000 {
           			status = "disabled";
           		};
           
-          		/* GPIO20/21 are HL-WR832 LTE controls; I2C remains disabled. */
+          		/* OEM-derived HL-WR832 mapping reserves GPIO20/21 for LTE controls. */
           		i2c@78b7000 {
           			status = "disabled";
           		};
@@ -131,14 +134,7 @@ jobs:
           			status = "okay";
           		};
           
-          		crypto@8e3a000 {
-          			status = "okay";
-          		};
-          
-          		watchdog@b017000 {
-          			status = "okay";
-          		};
-          
+          		/* OEM factory-reset signal: SS_RST_N_GPIO18, active low. */
           		keys {
           			compatible = "gpio-keys";
           
@@ -149,6 +145,7 @@ jobs:
           			};
           		};
           
+          		/* OEM LED sheet: GPIO1/2/3/4/5. */
           		leds {
           			compatible = "gpio-leds";
           
@@ -180,19 +177,18 @@ jobs:
           	};
           };
           
+          /* Required generic DMA engine for BLSP SPI/UART operation. */
           &blsp_dma {
           	status = "okay";
           };
           
-          &cryptobam {
-          	status = "okay";
-          };
-          
+          /* Required generic QPIC BAM engine for the OEM parallel NAND. */
           &qpic_bam {
           	status = "okay";
           };
           
           &tlmm {
+          	/* OEM schematic: GPIO6=MDIO, GPIO7=MDC. */
           	hlwr832_mdio_pins: hlwr832-mdio-pins {
           		mux-mdio {
           			pins = "gpio6";
@@ -207,6 +203,7 @@ jobs:
           		};
           	};
           
+          	/* OEM schematic: GPIO16=UART0_RXD, GPIO17=UART0_TXD. */
           	hlwr832_serial0_pins: hlwr832-serial0-pins {
           		mux {
           			pins = "gpio16", "gpio17";
@@ -215,6 +212,7 @@ jobs:
           		};
           	};
           
+          	/* OEM schematic: GPIO12=CS, 13=MOSI, 14=SCK, 15=MISO. */
           	hlwr832_spi0_pins: hlwr832-spi0-pins {
           		data-clock {
           			function = "blsp_spi0";
@@ -232,6 +230,7 @@ jobs:
           		};
           	};
           
+          	/* OEM-verified QPIC/NAND physical pin range; IPQ4019 software bias pattern. */
           	nand_pins: hlwr832-nand-pins {
           		pullups {
           			pins = "gpio53", "gpio58", "gpio59";
@@ -310,11 +309,14 @@ jobs:
           	status = "okay";
           
           	nand@0 {
+          		reg = <0>;
+          
           		partitions {
           			compatible = "fixed-partitions";
           			#address-cells = <1>;
           			#size-cells = <1>;
           
+          			/* Physical NAND is 1 Gbit; observed board layout uses a 64 MiB UBI region. */
           			partition@0 {
           				label = "ubi";
           				reg = <0x00000000 0x04000000>;
@@ -337,8 +339,13 @@ jobs:
           	qcom,ath10k-calibration-variant = "Hooolink-HL-WR832";
           };
           
-          &gmac { status = "okay"; };
-          &switch { status = "okay"; };
+          &gmac {
+          	status = "okay";
+          };
+          
+          &switch {
+          	status = "okay";
+          };
           
           /* OEM switch schematic: PHY PORT0-3 are LAN, PORT4 is WAN. */
           &swport1 { status = "okay"; label = "lan1"; };
@@ -349,16 +356,28 @@ jobs:
           HLWR832_DTS
 
           DTS=target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          echo "980afb1c86fee9d3d60b7ab859aa0915da38df0e337933b934b1c1961a88acdc  $DTS" | sha256sum -c -
+          echo "264981881c4425d4bbbf4af894625c03a876e3ffbacc288db2d3eb7e617e5d95  $DTS" | sha256sum -c -
 
-          ! grep -Eiq 'e2600|e2600ac|e2600ac-c2' "$DTS"
+          # Permanent board-contamination guards.
+          ! grep -Eiq 'e2600|e2600ac|e2600ac-c2|ipq4029' "$DTS"
           ! grep -Eq '&keys|&i2c@|&serial@' "$DTS"
           grep -Fq '#include "qcom-ipq4019.dtsi"' "$DTS"
+
+          # OEM-derived identity / memory / GPIO checks.
+          grep -Fq 'model = "Hooolink HL-WR832";' "$DTS"
+          grep -Fq 'reg = <0x80000000 0x20000000>;' "$DTS"
+          grep -Fq 'gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;' "$DTS"
+          grep -Fq 'pins = "gpio6";' "$DTS"
+          grep -Fq 'pins = "gpio7";' "$DTS"
+          grep -Fq 'pins = "gpio16", "gpio17";' "$DTS"
+          grep -Fq 'pins = "gpio13", "gpio14", "gpio15";' "$DTS"
+          grep -Fq 'pins = "gpio12";' "$DTS"
           grep -Fq 'nand_pins: hlwr832-nand-pins' "$DTS"
           grep -Fq 'pinctrl-0 = <&nand_pins>;' "$DTS"
-          grep -Fq 'gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;' "$DTS"
-          grep -Fq 'pins = "gpio8", "gpio9"' "$DTS" && exit 1 || true
-          grep -Fq 'pins = "gpio20", "gpio21"' "$DTS" && exit 1 || true
+
+          # LTE-reserved pins must never be remuxed as UART1/I2C in this DTS.
+          if grep -Fq 'pins = "gpio8", "gpio9"' "$DTS"; then exit 1; fi
+          if grep -Fq 'pins = "gpio20", "gpio21"' "$DTS"; then exit 1; fi
 
       - name: Install exact authoritative config and compatibility corrections
         working-directory: rooter
@@ -398,20 +417,69 @@ jobs:
           set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
 
-      - name: Preflight target and DTB before full 90-minute build
-        id: preflight
+      - name: Build host tools and target toolchain before DTS preflight
+        id: toolchain
         if: steps.download.outcome == 'success'
         working-directory: rooter
         continue-on-error: true
         run: |
           set -o pipefail
+          {
+            echo '=== tools/install ==='
+            make tools/install -j2 V=s
+            echo '=== toolchain/install ==='
+            make toolchain/install -j2 V=s
+          } 2>&1 | tee ../toolchain-preflight.log
+
+      - name: Prepare patched IPQ40xx kernel tree
+        id: prepare
+        if: steps.toolchain.outcome == 'success'
+        working-directory: rooter
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make target/linux/prepare -j2 V=s 2>&1 | tee ../target-linux-prepare.log
+
+      - name: Audit every DTS label against the prepared source tree
+        id: labelaudit
+        if: steps.prepare.outcome == 'success'
+        working-directory: rooter
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          DTS=target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+          KDT=$(find build_dir -type d -path '*/linux-ipq40xx_generic/linux-*/arch/arm/boot/dts' -print -quit)
+          test -n "$KDT"
+          echo "Prepared DTS directory: $KDT"
+
+          # The board-local labels are resolved inside the HL-WR832 DTS itself.
+          # Every external label below must exist in the fully patched kernel DTS tree.
+          for label in \
+            blsp_dma qpic_bam usb3_ss_phy usb3_hs_phy usb2_hs_phy blsp1_spi1 \
+            nand wifi0 wifi1 gmac switch swport1 swport2 swport3 swport4 swport5 tlmm
+          do
+            if ! grep -RqsE "(^|[[:space:]])${label}:[[:space:]]" "$KDT"; then
+              echo "ERROR: external DTS label not found after OpenWrt patches: $label"
+              exit 1
+            fi
+          done
+
+          # Verify no prohibited foreign-board include survived anywhere in the HL-WR832 DTS.
+          ! grep -Eiq 'e2600|e2600ac|e2600ac-c2|ipq4029' "$DTS"
+
+      - name: Compile IPQ40xx target and HL-WR832 DTB preflight
+        id: preflight
+        if: steps.labelaudit.outcome == 'success'
+        working-directory: rooter
+        continue-on-error: true
+        run: |
+          set -o pipefail
           make target/linux/compile -j2 V=s 2>&1 | tee ../target-linux-preflight.log
-          test -f build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-ipq40xx_generic/image-qcom-ipq4019-hooolink-hl-wr832.dtb || \
-            find build_dir -type f -name 'image-qcom-ipq4019-hooolink-hl-wr832.dtb' -print -quit | grep -q .
+          find build_dir -type f -name 'image-qcom-ipq4019-hooolink-hl-wr832.dtb' -print -quit | grep -q .
 
       - name: Full ROOter engineering build
         id: fullbuild
-        if: steps.download.outcome == 'success' && steps.preflight.outcome == 'success'
+        if: steps.preflight.outcome == 'success'
         working-directory: rooter
         continue-on-error: true
         run: |
@@ -425,11 +493,13 @@ jobs:
           mkdir -p artifact
           cp engineering/HL-WR832-board-support.patch artifact/HL-WR832-authoritative-board-support.patch
           cp engineering/HL-WR832.config artifact/HL-WR832-authoritative.config
-          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build10-effective.config; fi
+          if [ -f rooter/.config ]; then cp rooter/.config artifact/HL-WR832-Build11-effective.config; fi
           if [ -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ]; then
-            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build10-effective.dts
+            cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/HL-WR832-Build11-effective.dts
           fi
           [ ! -f download.log ] || cp download.log artifact/
+          [ ! -f toolchain-preflight.log ] || cp toolchain-preflight.log artifact/
+          [ ! -f target-linux-prepare.log ] || cp target-linux-prepare.log artifact/
           [ ! -f target-linux-preflight.log ] || cp target-linux-preflight.log artifact/
           [ ! -f build.log ] || cp build.log artifact/
 
@@ -443,11 +513,11 @@ jobs:
 
           (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
 
-      - name: Upload Build 10 evidence and firmware
+      - name: Upload Build 11 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HL-WR832-ROOter2305-engineering-Build10
+          name: HL-WR832-ROOter2305-engineering-Build11
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
@@ -456,9 +526,15 @@ jobs:
         if: always()
         run: |
           echo "download outcome: ${{ steps.download.outcome }}"
+          echo "toolchain outcome: ${{ steps.toolchain.outcome }}"
+          echo "target prepare outcome: ${{ steps.prepare.outcome }}"
+          echo "DTS label audit outcome: ${{ steps.labelaudit.outcome }}"
           echo "target/linux preflight outcome: ${{ steps.preflight.outcome }}"
           echo "full build outcome: ${{ steps.fullbuild.outcome }}"
           test "${{ steps.download.outcome }}" = "success"
+          test "${{ steps.toolchain.outcome }}" = "success"
+          test "${{ steps.prepare.outcome }}" = "success"
+          test "${{ steps.labelaudit.outcome }}" = "success"
           test "${{ steps.preflight.outcome }}" = "success"
           test "${{ steps.fullbuild.outcome }}" = "success"
           test -f rooter/bin/targets/ipq40xx/generic/openwrt-ipq40xx-generic-hooolink_hl-wr832-squashfs-sysupgrade.bin
