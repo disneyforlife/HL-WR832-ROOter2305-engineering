@@ -305,8 +305,6 @@ jobs:
           &swport5 { status = "okay"; label = "wan"; };
           HLWR832_DTS
 
-    # ... (previous checkout steps remain the same) ...
-
       - name: Inject HL-WR832 Config into ROOTer Build System
         working-directory: rooter
         run: |
