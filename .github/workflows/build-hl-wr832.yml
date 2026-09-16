@@ -305,20 +305,48 @@ jobs:
           &swport5 { status = "okay"; label = "wan"; };
           HLWR832_DTS
 
-      - name: Install exact authoritative config and compatibility corrections
+    # ... (previous checkout steps remain the same) ...
+
+      - name: Inject HL-WR832 Config into ROOTer Build System
         working-directory: rooter
         run: |
           set -euxo pipefail
+          
+          # 1. Update and install all custom ROOTer feeds (The AI missed this completely!)
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+          # 2. We use your base hardware config, but we MUST inject the ROOTer packages
           cp ../engineering/HL-WR832.config .config
           
-          sed -i \
-            -e 's/^# CONFIG_PACKAGE_ucode-mod-nl80211 is not set$/CONFIG_PACKAGE_ucode-mod-nl80211=y/' \
-            -e 's/^# CONFIG_PACKAGE_ucode-mod-rtnl is not set$/CONFIG_PACKAGE_ucode-mod-rtnl=y/' \
-            -e 's/^# CONFIG_PACKAGE_ucode-mod-uloop is not set$/CONFIG_PACKAGE_ucode-mod-uloop=y/' \
-            .config
+          # Inject the ROOTer core packages that are missing from your config
+          sed -i -e 's/# CONFIG_PACKAGE_ext-rooter-lite is not set/CONFIG_PACKAGE_ext-rooter-lite=y/g' .config
+          sed -i -e 's/# CONFIG_PACKAGE_ext-rooter16 is not set/CONFIG_PACKAGE_ext-rooter16=y/g' .config
           
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config || \
-            printf '%s\n' 'CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y' >> .config
+          # Inject the modem protocols manually just to be safe
+          echo "CONFIG_PACKAGE_uqmi=y" >> .config
+          echo "CONFIG_PACKAGE_umbim=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-mbim=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-serial-option=y" >> .config
+          
+          # Run defconfig to let the system resolve dependencies based on what we just injected
+          make defconfig
+
+      - name: Download build sources
+        id: download
+        working-directory: rooter
+        continue-on-error: true
+        run: |
+          make download -j2 V=s 2>&1 | tee ../download.log
+
+      - name: Full ROOter engineering build
+        id: fullbuild
+        if: steps.download.outcome == 'success'
+        working-directory: rooter
+        continue-on-error: true
+        run: |
+          make -j2 V=s 2>&1 | tee ../build.log
 
       - name: Apply authorized libdeflate 1.18 source-hash correction
         working-directory: rooter
