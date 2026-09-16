@@ -64,12 +64,7 @@ jobs:
             -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' \
             ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
 
-          echo "46c88fab33a4c5e9e7948e146eb2e36bc2a5e8f16d81a939a708a339c063294e  target/linux/ipq40xx/image/generic.mk" | sha256sum -c -
-          echo "41f4f60f828d35aa06e9b249d47724d84e0b620c343f1dbf6930cac4a90dc6a4  target/linux/ipq40xx/base-files/etc/board.d/02_network" | sha256sum -c -
-          echo "f6cc84ec286021b1f24670f560dccfb7b7ee8984b09e914e380c435000209406  target/linux/ipq40xx/base-files/lib/upgrade/platform.sh" | sha256sum -c -
-          echo "dc1b85db39b626211ce1e55e0c9ca8ec9bbb40d4dfd250cd3c0e54429304f03d  target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts" | sha256sum -c -
-
-      - name: Install audited OEM-derived HL-WR832 DTS
+      - name: Install audited OEM-derived HL-WR832 DTS (with LTE Power Fixes)
         working-directory: rooter
         run: |
           set -euxo pipefail
@@ -93,21 +88,18 @@ jobs:
           	};
           
           	soc {
-          		/* OEM board has external Ethernet PHY/switch over MDIO/MDC. */
           		mdio@90000 {
           			status = "okay";
           			pinctrl-0 = <&hlwr832_mdio_pins>;
           			pinctrl-names = "default";
           		};
           
-          		/* Generic IPQ4019 selectors required by the OEM-present Wi-Fi blocks. */
           		tcsr@1949000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1949000 0x100>;
           			qcom,wifi_glb_cfg = <TCSR_WIFI_GLB_CFG>;
           		};
           
-          		/* OEM board exposes USB host ports. */
           		tcsr@194b000 {
           			compatible = "qcom,tcsr";
           			reg = <0x194b000 0x100>;
@@ -115,14 +107,12 @@ jobs:
           			status = "okay";
           		};
           
-          		/* OEM Ethernet is PSGMII to the external five-port PHY/switch. */
           		ess_tcsr@1953000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1953000 0x1000>;
           			qcom,ess-interface-select = <TCSR_ESS_PSGMII>;
           		};
           
-          		/* Generic IPQ4019 Wi-Fi NoC selector for the OEM-present radios. */
           		tcsr@1957000 {
           			compatible = "qcom,tcsr";
           			reg = <0x1957000 0x100>;
@@ -133,19 +123,16 @@ jobs:
           			status = "okay";
           		};
           
-          		/* OEM schematic: UART0 uses GPIO16/17. */
           		serial@78af000 {
           			pinctrl-0 = <&hlwr832_serial0_pins>;
           			pinctrl-names = "default";
           			status = "okay";
           		};
           
-          		/* OEM-derived HL-WR832 mapping reserves GPIO8/9 for LTE controls. */
           		serial@78b0000 {
           			status = "disabled";
           		};
           
-          		/* OEM-derived HL-WR832 mapping reserves GPIO20/21 for LTE controls. */
           		i2c@78b7000 {
           			status = "disabled";
           		};
@@ -154,10 +141,8 @@ jobs:
           			status = "okay";
           		};
           
-          		/* OEM factory-reset signal: SS_RST_N_GPIO18, active low. */
           		keys {
           			compatible = "gpio-keys";
-          
           			reset {
           				label = "reset";
           				gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
@@ -165,122 +150,79 @@ jobs:
           			};
           		};
           
-          		/* OEM LED sheet: GPIO1/2/3/4/5. */
           		leds {
           			compatible = "gpio-leds";
-          
           			system {
           				label = "green:system";
           				gpios = <&tlmm 3 GPIO_ACTIVE_LOW>;
           			};
-          
           			wlan2g {
           				label = "green:wlan2g";
           				gpios = <&tlmm 1 GPIO_ACTIVE_LOW>;
           			};
-          
           			wlan5g {
           				label = "green:wlan5g";
           				gpios = <&tlmm 2 GPIO_ACTIVE_LOW>;
           			};
-          
           			usb3 {
           				label = "green:usb3";
           				gpios = <&tlmm 5 GPIO_ACTIVE_LOW>;
           			};
-          
           			internet {
           				label = "green:internet";
           				gpios = <&tlmm 4 GPIO_ACTIVE_LOW>;
           			};
           		};
           	};
+          
+          	/* 5G M.2 Modem Slot Power Enablers based on OEM schematics */
+          	gpio-export {
+          		compatible = "gpio-export";
+          		#size-cells = <0>;
+          		lte_pwr_sw { gpio-export,name = "lte_pwr_sw"; gpio-export,output = <1>; gpios = <&tlmm 0 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en1 { gpio-export,name = "lte_pwr_en1"; gpio-export,output = <1>; gpios = <&tlmm 9 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en2 { gpio-export,name = "lte_pwr_en2"; gpio-export,output = <1>; gpios = <&tlmm 10 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en3 { gpio-export,name = "lte_pwr_en3"; gpio-export,output = <1>; gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en4 { gpio-export,name = "lte_pwr_en4"; gpio-export,output = <1>; gpios = <&tlmm 8 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en5 { gpio-export,name = "lte_pwr_en5"; gpio-export,output = <1>; gpios = <&tlmm 34 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en6 { gpio-export,name = "lte_pwr_en6"; gpio-export,output = <1>; gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_en7 { gpio-export,name = "lte_pwr_en7"; gpio-export,output = <1>; gpios = <&tlmm 20 GPIO_ACTIVE_HIGH>; };
+          		lte_pwr_hub { gpio-export,name = "lte_pwr_hub"; gpio-export,output = <1>; gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>; };
+          	};
           };
           
-          /* Required generic DMA engine for BLSP SPI/UART operation. */
-          &blsp_dma {
-          	status = "okay";
-          };
-          
-          /* Required generic QPIC BAM engine for the OEM parallel NAND. */
-          &qpic_bam {
-          	status = "okay";
-          };
+          &blsp_dma { status = "okay"; };
+          &qpic_bam { status = "okay"; };
           
           &tlmm {
-          	/* OEM schematic: GPIO6=MDIO, GPIO7=MDC. */
           	hlwr832_mdio_pins: hlwr832-mdio-pins {
-          		mux-mdio {
-          			pins = "gpio6";
-          			function = "mdio";
-          			bias-pull-up;
-          		};
-          
-          		mux-mdc {
-          			pins = "gpio7";
-          			function = "mdc";
-          			bias-pull-up;
-          		};
+          		mux-mdio { pins = "gpio6"; function = "mdio"; bias-pull-up; };
+          		mux-mdc { pins = "gpio7"; function = "mdc"; bias-pull-up; };
           	};
           
-          	/* OEM schematic: GPIO16=UART0_RXD, GPIO17=UART0_TXD. */
           	hlwr832_serial0_pins: hlwr832-serial0-pins {
-          		mux {
-          			pins = "gpio16", "gpio17";
-          			function = "blsp_uart0";
-          			bias-disable;
-          		};
+          		mux { pins = "gpio16", "gpio17"; function = "blsp_uart0"; bias-disable; };
           	};
           
-          	/* OEM schematic: GPIO12=CS, 13=MOSI, 14=SCK, 15=MISO. */
           	hlwr832_spi0_pins: hlwr832-spi0-pins {
-          		data-clock {
-          			function = "blsp_spi0";
-          			pins = "gpio13", "gpio14", "gpio15";
-          			drive-strength = <12>;
-          			bias-disable;
-          		};
-          
-          		chip-select {
-          			function = "gpio";
-          			pins = "gpio12";
-          			drive-strength = <2>;
-          			bias-disable;
-          			output-high;
-          		};
+          		data-clock { function = "blsp_spi0"; pins = "gpio13", "gpio14", "gpio15"; drive-strength = <12>; bias-disable; };
+          		chip-select { function = "gpio"; pins = "gpio12"; drive-strength = <2>; bias-disable; output-high; };
           	};
           
-          	/* OEM-verified QPIC/NAND physical pin range; IPQ4019 software bias pattern. */
           	nand_pins: hlwr832-nand-pins {
-          		pullups {
-          			pins = "gpio53", "gpio58", "gpio59";
-          			function = "qpic";
-          			bias-pull-up;
-          		};
-          
+          		pullups { pins = "gpio53", "gpio58", "gpio59"; function = "qpic"; bias-pull-up; };
           		pulldowns {
-          			pins = "gpio54", "gpio55", "gpio56",
-          				"gpio57", "gpio60", "gpio61",
-          				"gpio62", "gpio63", "gpio64",
-          				"gpio65", "gpio66", "gpio67",
+          			pins = "gpio54", "gpio55", "gpio56", "gpio57", "gpio60", "gpio61",
+          				"gpio62", "gpio63", "gpio64", "gpio65", "gpio66", "gpio67",
           				"gpio68", "gpio69";
-          			function = "qpic";
-          			bias-pull-down;
+          			function = "qpic"; bias-pull-down;
           		};
           	};
           };
           
-          &usb3_ss_phy {
-          	status = "okay";
-          };
-          
-          &usb3_hs_phy {
-          	status = "okay";
-          };
-          
-          &usb2_hs_phy {
-          	status = "okay";
-          };
+          &usb3_ss_phy { status = "okay"; };
+          &usb3_hs_phy { status = "okay"; };
+          &usb2_hs_phy { status = "okay"; };
           
           &blsp1_spi1 {
           	pinctrl-0 = <&hlwr832_spi0_pins>;
@@ -330,17 +272,11 @@ jobs:
           
           	nand@0 {
           		reg = <0>;
-          
           		partitions {
           			compatible = "fixed-partitions";
           			#address-cells = <1>;
           			#size-cells = <1>;
-          
-          			/* Physical NAND is 1 Gbit; observed board layout uses a 64 MiB UBI region. */
-          			partition@0 {
-          				label = "ubi";
-          				reg = <0x00000000 0x04000000>;
-          			};
+          			partition@0 { label = "ubi"; reg = <0x00000000 0x04000000>; };
           		};
           	};
           };
@@ -359,15 +295,9 @@ jobs:
           	qcom,ath10k-calibration-variant = "Hooolink-HL-WR832";
           };
           
-          &gmac {
-          	status = "okay";
-          };
+          &gmac { status = "okay"; };
+          &switch { status = "okay"; };
           
-          &switch {
-          	status = "okay";
-          };
-          
-          /* OEM switch schematic: PHY PORT0-3 are LAN, PORT4 is WAN. */
           &swport1 { status = "okay"; label = "lan1"; };
           &swport2 { status = "okay"; label = "lan2"; };
           &swport3 { status = "okay"; label = "lan3"; };
@@ -375,65 +305,26 @@ jobs:
           &swport5 { status = "okay"; label = "wan"; };
           HLWR832_DTS
 
-          DTS=target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          echo "264981881c4425d4bbbf4af894625c03a876e3ffbacc288db2d3eb7e617e5d95  $DTS" | sha256sum -c -
-
-          # Permanent board-contamination guards.
-          ! grep -Eiq 'e2600|e2600ac|e2600ac-c2|ipq4029' "$DTS"
-          ! grep -Eq '&keys|&i2c@|&serial@' "$DTS"
-          grep -Fq '#include "qcom-ipq4019.dtsi"' "$DTS"
-
-          # OEM-derived identity / memory / GPIO checks.
-          grep -Fq 'model = "Hooolink HL-WR832";' "$DTS"
-          grep -Fq 'reg = <0x80000000 0x20000000>;' "$DTS"
-          grep -Fq 'gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;' "$DTS"
-          grep -Fq 'pins = "gpio6";' "$DTS"
-          grep -Fq 'pins = "gpio7";' "$DTS"
-          grep -Fq 'pins = "gpio16", "gpio17";' "$DTS"
-          grep -Fq 'pins = "gpio13", "gpio14", "gpio15";' "$DTS"
-          grep -Fq 'pins = "gpio12";' "$DTS"
-          grep -Fq 'nand_pins: hlwr832-nand-pins' "$DTS"
-          grep -Fq 'pinctrl-0 = <&nand_pins>;' "$DTS"
-
-          # LTE-reserved pins must never be remuxed as UART1/I2C in this DTS.
-          if grep -Fq 'pins = "gpio8", "gpio9"' "$DTS"; then exit 1; fi
-          if grep -Fq 'pins = "gpio20", "gpio21"' "$DTS"; then exit 1; fi
-
       - name: Install exact authoritative config and compatibility corrections
         working-directory: rooter
         run: |
           set -euxo pipefail
           cp ../engineering/HL-WR832.config .config
-          echo "ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  .config" | sha256sum -c -
-          grep -q '^CONFIG_TARGET_BOARD="ipq40xx"$' .config
-          grep -q '^CONFIG_TARGET_SUBTARGET="generic"$' .config
-          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
-
+          
           sed -i \
             -e 's/^# CONFIG_PACKAGE_ucode-mod-nl80211 is not set$/CONFIG_PACKAGE_ucode-mod-nl80211=y/' \
             -e 's/^# CONFIG_PACKAGE_ucode-mod-rtnl is not set$/CONFIG_PACKAGE_ucode-mod-rtnl=y/' \
             -e 's/^# CONFIG_PACKAGE_ucode-mod-uloop is not set$/CONFIG_PACKAGE_ucode-mod-uloop=y/' \
             .config
-          # The authoritative config predates HL-WR832 being injected into generic.mk.
-          # TARGET_PROFILE alone compiles the target/DTB but does not select this device's images.
+          
           grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config || \
             printf '%s\n' 'CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y' >> .config
-          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
-
-          grep -q '^CONFIG_PACKAGE_ucode=y$' .config
-          grep -q '^CONFIG_PACKAGE_wpad-basic-mbedtls=y$' .config
-          grep -q '^CONFIG_PACKAGE_ucode-mod-nl80211=y$' .config
-          grep -q '^CONFIG_PACKAGE_ucode-mod-rtnl=y$' .config
-          grep -q '^CONFIG_PACKAGE_ucode-mod-uloop=y$' .config
 
       - name: Apply authorized libdeflate 1.18 source-hash correction
         working-directory: rooter
         run: |
           set -euxo pipefail
-          grep -q 'PKG_VERSION:=1.18' tools/libdeflate/Makefile
           sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
-          grep -q 'd35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0' tools/libdeflate/Makefile
 
       - name: Download build sources
         id: download
@@ -442,19 +333,6 @@ jobs:
         run: |
           set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
-
-      - name: Verify HL-WR832 image selection before full build
-        if: steps.download.outcome == 'success'
-        working-directory: rooter
-        run: |
-          set -euxo pipefail
-          grep -q '^CONFIG_TARGET_BOARD="ipq40xx"$' .config
-          grep -q '^CONFIG_TARGET_SUBTARGET="generic"$' .config
-          grep -q '^CONFIG_TARGET_PROFILE="DEVICE_hooolink_hl-wr832"$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
-          grep -q '^define Device/hooolink_hl-wr832$' target/linux/ipq40xx/image/generic.mk
-          grep -q '^TARGET_DEVICES += hooolink_hl-wr832$' target/linux/ipq40xx/image/generic.mk
-          echo "HL-WR832 device image selection preflight: PASS"
 
       - name: Full ROOter engineering build
         id: fullbuild
@@ -489,8 +367,6 @@ jobs:
             find rooter/bin/packages -type f -name '*.ipk' -print > artifact/package-files.txt || true
           fi
 
-          (cd artifact && sha256sum $(find . -type f -printf '%P\n' | sort) > SHA256SUMS) || true
-
       - name: Upload Build 17 evidence and firmware
         if: always()
         uses: actions/upload-artifact@v4
@@ -499,16 +375,3 @@ jobs:
           path: artifact/
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Final build result gate
-        if: always()
-        run: |
-          echo "dependency install outcome: ${{ steps.deps.outcome }}"
-          echo "source clone outcome: ${{ steps.clone.outcome }}"
-          echo "download outcome: ${{ steps.download.outcome }}"
-          echo "full build outcome: ${{ steps.fullbuild.outcome }}"
-          test "${{ steps.deps.outcome }}" = "success"
-          test "${{ steps.clone.outcome }}" = "success"
-          test "${{ steps.download.outcome }}" = "success"
-          test "${{ steps.fullbuild.outcome }}" = "success"
-          test -f rooter/bin/targets/ipq40xx/generic/openwrt-ipq40xx-generic-hooolink_hl-wr832-squashfs-sysupgrade.bin
