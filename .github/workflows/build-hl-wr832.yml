@@ -353,7 +353,7 @@ jobs:
           sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
 
       - name: Download build sources
-        id: download
+        id: dl
         working-directory: rooter
         continue-on-error: true
         run: |
@@ -361,7 +361,7 @@ jobs:
           make download -j2 V=s 2>&1 | tee ../download.log
 
       - name: Full ROOter engineering build
-        id: fullbuild
+        id: fb
         if: steps.download.outcome == 'success'
         working-directory: rooter
         continue-on-error: true
