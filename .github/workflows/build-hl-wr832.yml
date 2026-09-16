@@ -16,8 +16,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        id: deps
-        continue-on-error: true
         run: |
           set -o pipefail
           {
@@ -37,9 +35,6 @@ jobs:
           } 2>&1 | tee bootstrap.log
 
       - name: Clone pristine ROOter 23.05 source
-        id: clone
-        if: steps.deps.outcome == 'success'
-        continue-on-error: true
         run: |
           set -o pipefail
           {
@@ -49,7 +44,6 @@ jobs:
           } 2>&1 | tee clone.log
 
       - name: Verify authoritative engineering inputs
-        if: steps.clone.outcome == 'success'
         run: |
           set -euxo pipefail
           echo "865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch" | sha256sum -c -
@@ -331,21 +325,6 @@ jobs:
           # Run defconfig to let the system resolve dependencies based on what we just injected
           make defconfig
 
-      - name: Download build sources
-        id: download
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          make download -j2 V=s 2>&1 | tee ../download.log
-
-      - name: Full ROOter engineering build
-        id: fullbuild
-        if: steps.download.outcome == 'success'
-        working-directory: rooter
-        continue-on-error: true
-        run: |
-          make -j2 V=s 2>&1 | tee ../build.log
-
       - name: Apply authorized libdeflate 1.18 source-hash correction
         working-directory: rooter
         run: |
@@ -353,18 +332,15 @@ jobs:
           sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
 
       - name: Download build sources
-        id: dl
+        id: download
         working-directory: rooter
-        continue-on-error: true
         run: |
           set -o pipefail
           make download -j2 V=s 2>&1 | tee ../download.log
 
       - name: Full ROOter engineering build
-        id: fb
-        if: steps.download.outcome == 'success'
+        id: fullbuild
         working-directory: rooter
-        continue-on-error: true
         run: |
           set -o pipefail
           make -j2 V=s 2>&1 | tee ../build.log
