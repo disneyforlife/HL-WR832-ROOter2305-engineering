@@ -1,140 +1,278 @@
-name: Build HL-WR832 full ROOter 23.05
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 240
-
-    steps:
-      - name: Checkout engineering repository
-        uses: actions/checkout@v4
-
-      - name: Install build dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential clang flex bison g++ gawk gcc-multilib gettext git \
-            libncurses-dev libssl-dev python3 python3-dev python3-setuptools \
-            rsync swig unzip zlib1g-dev file wget curl patch xz-utils zstd
-
-      - name: Clone ROOter 23.05
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git clone --depth 1 https://github.com rooter
-          git -C rooter rev-parse HEAD
-
-      - name: Verify engineering inputs
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sha256sum -c <<'EOF'
-          865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch
-          ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  engineering/HL-WR832.config
-          EOF
-
-      - name: Apply HL-WR832 board support
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sed \
-            -e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' \
-            -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' \
-            ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
-          test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          grep -Fq 'define Device/hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
-          grep -Fq 'TARGET_DEVICES += hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
-          grep -Fq 'compatible = "hooolink,hl-wr832"' target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          git diff --check
-
-      - name: Configure complete ROOter build
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          cp ../engineering/HL-WR832.config .config
-          
-          sed -i 's/CONFIG_DEFAULT_kmod-ath10k-ct=y/# CONFIG_DEFAULT_kmod-ath10k-ct is not set/' .config
-          sed -i 's/CONFIG_DEFAULT_ath10k-firmware-qca4019-ct=y/# CONFIG_DEFAULT_ath10k-firmware-qca4019-ct is not set/' .config
-          sed -i 's/CONFIG_PACKAGE_wpad-basic-wolfssl=y/# CONFIG_PACKAGE_wpad-basic-wolfssl is not set/' .config
-          
-          echo "CONFIG_TARGET_ipq40xx=y" >> .config
-          echo "CONFIG_TARGET_ipq40xx_generic=y" >> .config
-          echo "CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y" >> .config
-          
-          echo "CONFIG_PACKAGE_kmod-ath10k=y" >> .config
-          echo "CONFIG_PACKAGE_ath10k-firmware-qca4019=y" >> .config
-          echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
-
-          make defconfig V=s 2>&1 | tee ../defconfig.log
-          grep -q '^CONFIG_TARGET_ipq40xx=y$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic=y$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
-
-      - name: Fix libdeflate source hash
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
-
-      - name: Download ROOter sources
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -o pipefail
-          make download -j2 V=s 2>&1 | tee ../download.log
-
-      - name: Build complete HL-WR832 ROOter firmware
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -o pipefail
-          make -j2 V=s 2>&1 | tee ../build.log
-
-      - name: Verify complete firmware output
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          out=bin/targets/ipq40xx/generic
-          test -d "$out"
-          find "$out" -maxdepth 1 -type f -print | sort
-          compgen -G "$out/*hooolink*hl-wr832*" > /dev/null
-          test -s .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
-
-      - name: Collect build evidence
-        if: always()
-        shell: bash
-        run: |
-          set -eux
-          mkdir -p artifact
-          cp engineering/HL-WR832-board-support.patch artifact/
-          cp engineering/HL-WR832.config artifact/
-          [ ! -f defconfig.log ] || cp defconfig.log artifact/
-          [ ! -f download.log ] || cp download.log artifact/
-          [ ! -f build.log ] || cp build.log artifact/
-          [ ! -f rooter/.config ] || cp rooter/.config artifact/effective.config
-          [ ! -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ] || cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/effective.dts
-          [ ! -d rooter/bin/targets/ipq40xx/generic ] || cp -a rooter/bin/targets/ipq40xx/generic artifact/firmware
-
-      - name: Upload firmware and evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HL-WR832-full-ROOter-23.05
-          path: artifact/
-          if-no-files-found: warn
-          retention-days: 30
+--- a/target/linux/ipq40xx/image/generic.mk
++++ b/target/linux/ipq40xx/image/generic.mk
+@@ -1029,6 +1029,19 @@
+ endef
+ TARGET_DEVICES += qcom_ap-dk04.1-c1
+ 
++define Device/hooolink_hl-wr832
++	$(call Device/FitImage)
++	$(call Device/UbiFit)
++	DEVICE_VENDOR := Hooolink
++	DEVICE_MODEL := HL-WR832
++	SOC := qcom-ipq4019
++	DEVICE_DTS := qcom-ipq4019-hooolink-hl-wr832
++	KERNEL_INSTALL := 1
++	BLOCKSIZE := 128k
++	PAGESIZE := 2048
++endef
++TARGET_DEVICES += hooolink_hl-wr832
++
+ define Device/qxwlan_e2600ac-c1
+ 	$(call Device/FitImage)
+ 	DEVICE_VENDOR := Qxwlan
+--- a/target/linux/ipq40xx/base-files/etc/board.d/02_network
++++ b/target/linux/ipq40xx/base-files/etc/board.d/02_network
+@@ -100,6 +100,9 @@
+ 	plasmacloud,pa2200)
+ 		ucidef_set_interfaces_lan_wan "ethernet1" "ethernet2"
+ 		;;
++	hooolink,hl-wr832)
++		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
++		;;
+ 	qxwlan,e2600ac-c1)
+ 		ucidef_set_interfaces_lan_wan "sw-eth1" "sw-eth2"
+ 		;;
+--- a/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
+@@ -122,6 +122,7 @@
+ 	netgear,wac510 |\
+ 	p2w,r619ac-64m |\
+ 	p2w,r619ac-128m |\
++	hooolink,hl-wr832 |\
+ 	qxwlan,e2600ac-c2 |\
+ 	wallys,dr40x9)
+ 		nand_do_upgrade "$1"
+--- /dev/null
++++ b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+@@ -0,0 +1,228 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later OR MIT */
++/* Hooolink HL-WR832 - board-specific definition from OEM documentation and board dump. */
++
++/dts-v1/;
++#include "qcom-ipq4019.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	model = "Hooolink HL-WR832";
++	compatible = "hooolink,hl-wr832", "qcom,ipq4019";
++
++	memory {
++		device_type = "memory";
++		reg = <0x80000000 0x20000000>; /* OEM: 512 MB RAM Layout */
++	};
++
++	soc {
++		pinmux@1000000 {
++			serial_pins: serial_pins {
++				mux {
++					pins = "gpio16", "gpio17";
++					function = "blsp_uart0";
++					drive-strength = <8>;
++					bias-disable;
++				};
++			};
++
++			spi_0_pins: spi_0_pins {
++				mux {
++					pins = "gpio12", "gpio13", "gpio14", "gpio15";
++					function = "blsp_spi0";
++					drive-strength = <12>;
++					bias-disable;
++				};
++			};
++
++			nand_pins: nand_pins {
++				mux {
++					pins = "gpio53", "gpio55", "gpio56", "gpio57", "gpio58",
++					       "gpio59", "gpio60", "gpio62", "gpio63", "gpio64",
++					       "gpio65", "gpio66", "gpio67", "gpio68", "gpio69";
++					function = "qpic";
++					drive-strength = <12>;
++					bias-disable;
++				};
++			};
++		};
++
++		leds {
++			compatible = "gpio-leds";
++
++			system {
++				label = "green:system";
++				gpios = <&tlmm 3 GPIO_ACTIVE_LOW>;
++			};
++
++			wlan2g {
++				label = "green:wlan2g";
++				gpios = <&tlmm 1 GPIO_ACTIVE_LOW>;
++			};
++
++			wlan5g {
++				label = "green:wlan5g";
++				gpios = <&tlmm 2 GPIO_ACTIVE_LOW>;
++			};
++
++			usb3 {
++				label = "green:usb3";
++				gpios = <&tlmm 5 GPIO_ACTIVE_LOW>;
++			};
++
++			internet {
++				label = "green:internet";
++				gpios = <&tlmm 4 GPIO_ACTIVE_LOW>;
++			};
++		};
++
++		keys {
++			compatible = "gpio-keys";
++
++			restart {
++				label = "restart";
++				gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
++				linux,code = <KEY_RESTART>;
++			};
++		};
++
++		/* 5G M.2 Modem Slot Power Enablers based on OEM schematics */
++		gpio-export {
++			compatible = "gpio-export";
++			#size-cells = <0>;
++			lte_pwr_sw { gpio-export,name = "lte_pwr_sw"; gpio-export,output = <1>; gpios = <&tlmm 0 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en1 { gpio-export,name = "lte_pwr_en1"; gpio-export,output = <1>; gpios = <&tlmm 9 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en2 { gpio-export,name = "lte_pwr_en2"; gpio-export,output = <1>; gpios = <&tlmm 10 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en3 { gpio-export,name = "lte_pwr_en3"; gpio-export,output = <1>; gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en4 { gpio-export,name = "lte_pwr_en4"; gpio-export,output = <1>; gpios = <&tlmm 8 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en5 { gpio-export,name = "lte_pwr_en5"; gpio-export,output = <1>; gpios = <&tlmm 34 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en6 { gpio-export,name = "lte_pwr_en6"; gpio-export,output = <1>; gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en7 { gpio-export,name = "lte_pwr_en7"; gpio-export,output = <1>; gpios = <&tlmm 20 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_hub { gpio-export,name = "lte_pwr_hub"; gpio-export,output = <1>; gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>; };
++		};
++	};
++};
++
++&blsp1_uart1 {
++	pinctrl-0 = <&serial_pins>;
++	pinctrl-names = "default";
++	status = "okay";
++};
++
++&blsp1_spi0 {
++	pinctrl-0 = <&spi_0_pins>;
++	pinctrl-names = "default";
++	status = "okay";
++	cs-gpios = <&tlmm 12 GPIO_ACTIVE_LOW>;
++
++	flash@0 {
++		reg = <0>;
++		compatible = "jedec,spi-nor";
++		spi-max-frequency = <24000000>;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "0:SBL1";
++				reg = <0x000000 0x040000>;
++				read-only;
++			};
++			partition@40000 {
++				label = "0:MIBIB";
++				reg = <0x040000 0x020000>;
++				read-only;
++			};
++			partition@60000 {
++				label = "0:QSEE";
++				reg = <0x060000 0x060000>;
++				read-only;
++			};
++			partition@c0000 {
++				label = "0:CDT";
++				reg = <0x0c0000 0x010000>;
++				read-only;
++			};
++			partition@d0000 {
++				label = "0:DDRPARAMS";
++				reg = <0x0d0000 0x010000>;
++				read-only;
++			};
++			partition@e0000 {
++				label = "0:APPSBLENV";
++				reg = <0x0e0000 0x010000>;
++				read-only;
++			};
++			partition@f0000 {
++				label = "0:APPSBL";
++				reg = <0x0f0000 0x080000>;
++				read-only;
++			};
++			partition@170000 {
++				label = "0:ART";
++				reg = <0x170000 0x010000>;
++				read-only;
++
++				compatible = "nvmem-cells";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				precal_art_1000: precal@1000 {
++					reg = <0x1000 0x2f20>;
++				};
++
++				precal_art_5000: precal@5000 {
++					reg = <0x5000 0x2f20>;
++				};
++
++				macaddr_gmac0: macaddr@0 {
++					reg = <0x0 0x6>;
++				};
++
++				macaddr_gmac1: macaddr@6 {
++					reg = <0x6 0x6>;
++				};
++			};
++		};
++	};
++};
++
++&nand {
++	pinctrl-0 = <&nand_pins>;
++	pinctrl-names = "default";
++	status = "okay";
++
++	nand@0 {
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "ubi";
++				reg = <0x00000000 0x04000000>; /* 1G Flash / 64 MiB UBI Layout */
++			};
++		};
++	};
++};
++
++&wifi0 {
++	status = "okay";
++	nvmem-cell-names = "pre-calibration";
++	nvmem-cells = <&precal_art_1000>;
++	qcom,ath10k-calibration-variant = "Hooolink-HL-WR832";
++};
++
++&wifi1 {
++	status = "okay";
++	nvmem-cell-names = "pre-calibration";
++	nvmem-cells = <&precal_art_5000>;
++	qcom,ath10k-calibration-variant = "Hooolink-HL-WR832";
++};
++
++&gmac { status = "okay"; };
++&switch { status = "okay"; };
++&swport1 { status = "okay"; label = "lan1"; };
++&swport2 { status = "okay"; label = "lan2"; };
++&swport3 { status = "okay"; label = "lan3"; };
++&swport4 { status = "okay"; label = "lan4"; };
++&swport5 { status = "okay"; label = "wan"; };
