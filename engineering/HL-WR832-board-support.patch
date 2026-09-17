@@ -1,5 +1,5 @@
---- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/target/linux/ipq40xx/image/generic.mk	2026-05-20 23:20:48.000000000 +0000
-+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/target/linux/ipq40xx/image/generic.mk	2026-09-09 10:10:46.189717948 +0000
+--- a/target/linux/ipq40xx/image/generic.mk
++++ b/target/linux/ipq40xx/image/generic.mk
 @@ -1029,6 +1029,19 @@
  endef
  TARGET_DEVICES += qcom_ap-dk04.1-c1
@@ -20,8 +20,8 @@
  define Device/qxwlan_e2600ac-c1
  	$(call Device/FitImage)
  	DEVICE_VENDOR := Qxwlan
---- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/target/linux/ipq40xx/base-files/etc/board.d/02_network	2026-05-20 23:20:48.000000000 +0000
-+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/target/linux/ipq40xx/base-files/etc/board.d/02_network	2026-09-09 10:10:48.474852556 +0000
+--- a/target/linux/ipq40xx/base-files/etc/board.d/02_network
++++ b/target/linux/ipq40xx/base-files/etc/board.d/02_network
 @@ -100,6 +100,9 @@
  	plasmacloud,pa2200)
  		ucidef_set_interfaces_lan_wan "ethernet1" "ethernet2"
@@ -32,8 +32,8 @@
  	qxwlan,e2600ac-c1)
  		ucidef_set_interfaces_lan_wan "sw-eth1" "sw-eth2"
  		;;
---- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh	2026-05-20 23:20:48.000000000 +0000
-+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh	2026-09-09 10:10:48.475460815 +0000
+--- a/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
 @@ -122,6 +122,7 @@
  	netgear,wac510 |\
  	p2w,r619ac-64m |\
@@ -42,13 +42,14 @@
  	qxwlan,e2600ac-c2 |\
  	wallys,dr40x9)
  		nand_do_upgrade "$1"
---- /dev/null	2026-09-09 10:07:20.463300364 +0000
-+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts	2026-09-09 10:10:44.039853071 +0000
-@@ -0,0 +1,213 @@
+--- /dev/null
++++ b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+@@ -0,0 +1,228 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later OR MIT */
 +/* Hooolink HL-WR832 - board-specific definition from OEM documentation and board dump. */
 +
-+#include "qcom-ipq4019-e2600ac.dtsi"
++/dts-v1/;
++#include "qcom-ipq4019.dtsi"
 +#include <dt-bindings/gpio/gpio.h>
 +#include <dt-bindings/input/input.h>
 +
@@ -58,11 +59,40 @@
 +
 +	memory {
 +		device_type = "memory";
-+		reg = <0x80000000 0x20000000>; /* OEM: 512 MB */
++		reg = <0x80000000 0x20000000>; /* OEM: 512 MB RAM Layout */
 +	};
 +
 +	soc {
-+		/delete-node/ leds;
++		pinmux@1000000 {
++			serial_pins: serial_pins {
++				mux {
++					pins = "gpio16", "gpio17";
++					function = "blsp_uart0";
++					drive-strength = <8>;
++					bias-disable;
++				};
++			};
++
++			spi_0_pins: spi_0_pins {
++				mux {
++					pins = "gpio12", "gpio13", "gpio14", "gpio15";
++					function = "blsp_spi0";
++					drive-strength = <12>;
++					bias-disable;
++				};
++			};
++
++			nand_pins: nand_pins {
++				mux {
++					pins = "gpio53", "gpio55", "gpio56", "gpio57", "gpio58",
++					       "gpio59", "gpio60", "gpio62", "gpio63", "gpio64",
++					       "gpio65", "gpio66", "gpio67", "gpio68", "gpio69";
++					function = "qpic";
++					drive-strength = <12>;
++					bias-disable;
++				};
++			};
++		};
 +
 +		leds {
 +			compatible = "gpio-leds";
@@ -92,24 +122,41 @@
 +				gpios = <&tlmm 4 GPIO_ACTIVE_LOW>;
 +			};
 +		};
++
++		keys {
++			compatible = "gpio-keys";
++
++			restart {
++				label = "restart";
++				gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
++				linux,code = <KEY_RESTART>;
++			};
++		};
++
++		/* 5G M.2 Modem Slot Power Enablers based on OEM schematics */
++		gpio-export {
++			compatible = "gpio-export";
++			#size-cells = <0>;
++			lte_pwr_sw { gpio-export,name = "lte_pwr_sw"; gpio-export,output = <1>; gpios = <&tlmm 0 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en1 { gpio-export,name = "lte_pwr_en1"; gpio-export,output = <1>; gpios = <&tlmm 9 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en2 { gpio-export,name = "lte_pwr_en2"; gpio-export,output = <1>; gpios = <&tlmm 10 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en3 { gpio-export,name = "lte_pwr_en3"; gpio-export,output = <1>; gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en4 { gpio-export,name = "lte_pwr_en4"; gpio-export,output = <1>; gpios = <&tlmm 8 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en5 { gpio-export,name = "lte_pwr_en5"; gpio-export,output = <1>; gpios = <&tlmm 34 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en6 { gpio-export,name = "lte_pwr_en6"; gpio-export,output = <1>; gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_en7 { gpio-export,name = "lte_pwr_en7"; gpio-export,output = <1>; gpios = <&tlmm 20 GPIO_ACTIVE_HIGH>; };
++			lte_pwr_hub { gpio-export,name = "lte_pwr_hub"; gpio-export,output = <1>; gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>; };
++		};
 +	};
 +};
 +
-+/* The OEM assigns GPIO18 to the factory-reset function. */
-+&keys {
++&blsp1_uart1 {
++	pinctrl-0 = <&serial_pins>;
++	pinctrl-names = "default";
 +	status = "okay";
 +};
 +
-+/* GPIO20/21 and GPIO8/9 are board LTE-power controls, not I2C/UART1. */
-+&i2c@78b7000 {
-+	status = "disabled";
-+};
-+
-+&serial@78b0000 {
-+	status = "disabled";
-+};
-+
-+&blsp1_spi1 {
++&blsp1_spi0 {
 +	pinctrl-0 = <&spi_0_pins>;
 +	pinctrl-names = "default";
 +	status = "okay";
@@ -189,7 +236,6 @@
 +	};
 +};
 +
-+/* OEM schematic: 1 Gbit x8 NAND; observed board layout exposes a 64 MiB UBI region. */
 +&nand {
 +	pinctrl-0 = <&nand_pins>;
 +	pinctrl-names = "default";
@@ -203,7 +249,7 @@
 +
 +			partition@0 {
 +				label = "ubi";
-+				reg = <0x00000000 0x04000000>;
++				reg = <0x00000000 0x04000000>; /* 1G Flash / 64 MiB UBI Layout */
 +			};
 +		};
 +	};
@@ -223,38 +269,10 @@
 +	qcom,ath10k-calibration-variant = "Hooolink-HL-WR832";
 +};
 +
-+&gmac {
-+	status = "okay";
-+};
-+
-+&switch {
-+	status = "okay";
-+};
-+
-+/* OEM switch schematic: PHY PORT0-3 are LAN, PORT4 is WAN. */
-+&swport1 {
-+	status = "okay";
-+	label = "lan1";
-+};
-+
-+&swport2 {
-+	status = "okay";
-+	label = "lan2";
-+};
-+
-+&swport3 {
-+	status = "okay";
-+	label = "lan3";
-+};
-+
-+&swport4 {
-+	status = "okay";
-+	label = "lan4";
-+};
-+
-+&swport5 {
-+	status = "okay";
-+	label = "wan";
-+};
-+
-+/* GPIO18 reset is already defined by the common IPQ40xx board support. */
++&gmac { status = "okay"; };
++&switch { status = "okay"; };
++&swport1 { status = "okay"; label = "lan1"; };
++&swport2 { status = "okay"; label = "lan2"; };
++&swport3 { status = "okay"; label = "lan3"; };
++&swport4 { status = "okay"; label = "lan4"; };
++&swport5 { status = "okay"; label = "wan"; };
