@@ -1,8 +1,6 @@
 name: Build HL-WR832 full ROOter 23.05
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
 
