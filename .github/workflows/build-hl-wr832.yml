@@ -1,128 +1,130 @@
-name: Build HL-WR832 full ROOter 23.05
+name: Build HL-WR832 full ROOter 23.05 
 
-on: {workflow_dispatch: {}}
+on: {workflow_dispatch: {}} 
 
 permissions:
-  contents: read
+contents: read 
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 240
+build:
+runs-on: ubuntu-22.04
+timeout-minutes: 240 
 
-    steps:
-      - name: Checkout engineering repository
-        uses: actions/checkout@v4
+steps:
 
-      - name: Install build dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential clang flex bison g++ gawk gcc-multilib gettext git \
-            libncurses-dev libssl-dev python3 python3-dev python3-setuptools \
-            rsync swig unzip zlib1g-dev file wget curl patch xz-utils zstd
+* name: Checkout engineering repository
+uses: actions/checkout@v4
+* name: Install build dependencies
+shell: bash
+run: |
+set -euxo pipefail
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y 
+build-essential clang flex bison g++ gawk gcc-multilib gettext git 
+libncurses-dev libssl-dev python3 python3-dev python3-setuptools 
+rsync swig unzip zlib1g-dev file wget curl patch xz-utils zstd
+* name: Clone ROOter 23.05
+shell: bash
+run: |
+set -euxo pipefail
+git clone --depth 1 [https://github.com/ofmodemsandmen/ROOterSource2305.git](https://github.com/ofmodemsandmen/ROOterSource2305.git) rooter
+git -C rooter rev-parse HEAD
+* name: Verify engineering inputs
+shell: bash
+run: |
+set -euxo pipefail
+sha256sum -c <<'EOF'
+865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch
+ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  engineering/HL-WR832.config
+EOF
+* name: Apply HL-WR832 board support
+working-directory: rooter
+shell: bash
+run: |
+set -euxo pipefail
+sed 
+-e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' 
+-e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' 
+../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
+test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+grep -Fq 'define Device/hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
+grep -Fq 'TARGET_DEVICES += hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
+grep -Fq 'compatible = "hooolink,hl-wr832"' target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
+git diff --check
+* name: Configure complete ROOter build
+working-directory: rooter
+shell: bash
+run: |
+set -euxo pipefail
+./scripts/feeds update -a
+./scripts/feeds install -a
+cp ../engineering/HL-WR832.config .config
 
-      - name: Clone ROOter 23.05
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git clone --depth 1 https://github.com/ofmodemsandmen/ROOterSource2305.git rooter
-          git -C rooter rev-parse HEAD
+### Fix conflicting wireless choices mid-flight without breaking original files
 
-      - name: Verify engineering inputs
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sha256sum -c <<'EOF'
-          865cfb219f9799d7ccc884a83aa133ac0a843d7fee10ddf4b9f95618718cf6b3  engineering/HL-WR832-board-support.patch
-          ae3d50534180c1a525bcffad5d2719d91c93ce2a7e8d5981b530ed69eed10395  engineering/HL-WR832.config
-          EOF
+sed -i 's/CONFIG_PACKAGE_kmod-ath10k-ct=y/# CONFIG_PACKAGE_kmod-ath10k-ct is not set/' .config
+sed -i 's/CONFIG_PACKAGE_ath10k-firmware-qca4019-ct=y/# CONFIG_PACKAGE_ath10k-firmware-qca4019-ct is not set/' .config
+sed -i 's/CONFIG_PACKAGE_wpad-basic-wolfssl=y/# CONFIG_PACKAGE_wpad-basic-wolfssl is not set/' .config 
 
-      - name: Apply HL-WR832 board support
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sed \
-            -e 's#^--- /mnt/data/hlwr832-build/pristine/ROOterSource2305-main/#--- a/#' \
-            -e 's#^+++ /mnt/data/hlwr832-build/src/ROOterSource2305-main/#+++ b/#' \
-            ../engineering/HL-WR832-board-support.patch | patch --batch --forward -p1
-          test -f target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          grep -Fq 'define Device/hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
-          grep -Fq 'TARGET_DEVICES += hooolink_hl-wr832' target/linux/ipq40xx/image/generic.mk
-          grep -Fq 'compatible = "hooolink,hl-wr832"' target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts
-          git diff --check
+# Inject clean, non-conflicting mesh and crypto selections
 
-      - name: Configure complete ROOter build
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          cp ../engineering/HL-WR832.config .config
-          # The checked-in engineering config is authoritative. Do not replace
-          # it with a shortened package list or rewrite the board definition.
-          make defconfig V=s 2>&1 | tee ../defconfig.log
-          grep -q '^CONFIG_TARGET_ipq40xx=y$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic=y$' .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
+echo "CONFIG_PACKAGE_kmod-ath10k=y" >> .config
+echo "CONFIG_PACKAGE_ath10k-firmware-qca4019=y" >> .config
+echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
 
-      - name: Fix libdeflate source hash
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
+make defconfig V=s 2>&1 | tee ../defconfig.log
+grep -q '^CONFIG_TARGET_ipq40xx=y$' .config
+grep -q '^CONFIG_TARGET_ipq40xx_generic=y$' .config
+grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
 
-      - name: Download ROOter sources
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -o pipefail
-          make download -j2 V=s 2>&1 | tee ../download.log
-
-      - name: Build complete HL-WR832 ROOter firmware
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -o pipefail
-          make -j2 V=s 2>&1 | tee ../build.log
-
-      - name: Verify complete firmware output
-        working-directory: rooter
-        shell: bash
-        run: |
-          set -euxo pipefail
-          out=bin/targets/ipq40xx/generic
-          test -d "$out"
-          find "$out" -maxdepth 1 -type f -print | sort
-          compgen -G "$out/*hooolink*hl-wr832*" > /dev/null
-          test -s .config
-          grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
-
-      - name: Collect build evidence
-        if: always()
-        shell: bash
-        run: |
-          set -eux
-          mkdir -p artifact
-          cp engineering/HL-WR832-board-support.patch artifact/
-          cp engineering/HL-WR832.config artifact/
-          [ ! -f defconfig.log ] || cp defconfig.log artifact/
-          [ ! -f download.log ] || cp download.log artifact/
-          [ ! -f build.log ] || cp build.log artifact/
-          [ ! -f rooter/.config ] || cp rooter/.config artifact/effective.config
-          [ ! -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ] || cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/effective.dts
-          [ ! -d rooter/bin/targets/ipq40xx/generic ] || cp -a rooter/bin/targets/ipq40xx/generic artifact/firmware
-
-      - name: Upload firmware and evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HL-WR832-full-ROOter-23.05
-          path: artifact/
-          if-no-files-found: warn
-          retention-days: 30
+* name: Fix libdeflate source hash
+working-directory: rooter
+shell: bash
+run: |
+set -euxo pipefail
+sed -i 's/015cbd33b1382b812f7c035640709186bc5d3d6a0ab177bffa7948f26f64edf9/d35d1e0b1eadbee29e5d76cc9b059661147722b4c5ffccd2c1b4c65591a70bc0/' tools/libdeflate/Makefile
+* name: Download ROOter sources
+working-directory: rooter
+shell: bash
+run: |
+set -o pipefail
+make download -j2 V=s 2>&1 | tee ../download.log
+* name: Build complete HL-WR832 ROOter firmware
+working-directory: rooter
+shell: bash
+run: |
+set -o pipefail
+make -j2 V=s 2>&1 | tee ../build.log
+* name: Verify complete firmware output
+working-directory: rooter
+shell: bash
+run: |
+set -euxo pipefail
+out=bin/targets/ipq40xx/generic
+test -d "$out"
+find "$out" -maxdepth 1 -type f -print | sort
+compgen -G "$out/*hooolink*hl-wr832*" > /dev/null
+test -s .config
+grep -q '^CONFIG_TARGET_ipq40xx_generic_DEVICE_hooolink_hl-wr832=y$' .config
+* name: Collect build evidence
+if: always()
+shell: bash
+run: |
+set -eux
+mkdir -p artifact
+cp engineering/HL-WR832-board-support.patch artifact/
+cp engineering/HL-WR832.config artifact/
+[ ! -f defconfig.log ] || cp defconfig.log artifact/
+[ ! -f download.log ] || cp download.log artifact/
+[ ! -f build.log ] || cp build.log artifact/
+[ ! -f rooter/.config ] || cp rooter/.config artifact/effective.config
+[ ! -f rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts ] || cp rooter/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-hooolink-hl-wr832.dts artifact/effective.dts
+[ ! -d rooter/bin/targets/ipq40xx/generic ] || cp -a rooter/bin/targets/ipq40xx/generic artifact/firmware
+* name: Upload firmware and evidence
+if: always()
+uses: actions/upload-artifact@v4
+with:
+name: HL-WR832-full-ROOter-23.05
+path: artifact/
+if-no-files-found: warn
+retention-days: 30
