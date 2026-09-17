@@ -26,7 +26,7 @@ jobs:
     # Clones the custom, pre-modified ROOter 23.05 framework repository
     - name: Pull Official ROOter Modified Repository
       run: |
-        git clone https://github.com rooter-build
+        git clone https://github.com/ofmodemsandmen/ROOterSource2305
         cd rooter-build
         ./scripts/feeds update -a
         ./scripts/feeds install -a
